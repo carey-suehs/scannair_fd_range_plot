@@ -1,0 +1,213 @@
+---
+title: "FD range plot, plus descriptive stats"
+output: html_notebook
+---
+
+Load up the usual packages.
+```{r}
+pacman::p_load(tidyr, dplyr, ggplot2, plyr, reshape2, gridBase)
+```
+
+Get the data.
+```{r}
+raw_data <- read.csv2("C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/FD_data/Expi.csv")
+raw_data2 <- read.csv("C:/Users/csuehs/Dropbox/SCANN'AIR_princeps/data-verification/Data_scannair_NA_corrections_isaetcarey_20170427.csv")
+```
+
+Extract the appropriate variables. We are interested in raw FD values for attentuation at -850HU and according to two factors: 
+
+* inspiratory versus expiratory measures;
+* upper versus lower lung.
+      ---slice 1
+      ---slice 10
+```{r}
+
+df_fd <- data.frame(raw_data$numpat,
+                  raw_data$I.850.H1,
+                  raw_data$I.850.H10,
+                  raw_data$I.850.L1,
+                  raw_data$I.850.L10,
+                  raw_data$E.850.H1,
+                  raw_data$E.850.H10,
+                  raw_data$E.850.L1,
+                  raw_data$E.850.L10)
+
+colnames(df_fd) <- c("patient",
+                   "fd_i_up_1", 
+                    "fd_i_up_10", 
+                    "fd_i_lo_1", 
+                    "fd_i_lo_10", 
+                    "fd_e_up_1", 
+                    "fd_e_up_10", 
+                    "fd_e_lo_1", 
+                    "fd_e_lo_10")
+
+df_fd$fd_i_up <- (df_fd$fd_i_up_1 + df_fd$fd_i_up_10)/2
+df_fd$fd_i_lo <- (df_fd$fd_i_lo_1 + df_fd$fd_i_lo_10)/2
+
+df_fd$fd_e_up <- (df_fd$fd_e_up_1 + df_fd$fd_e_up_10)/2
+df_fd$fd_e_lo <- (df_fd$fd_e_lo_1 + df_fd$fd_e_lo_10)/2
+
+rm(raw_data, raw_data2)
+
+```
+
+
+Do some datawrangling in preparation for a ggplot.
+
+```{r}
+temp1 <- data.frame(rep(5,length(df_fd$fd_i_up)),df_fd$fd_i_up)
+temp2 <- data.frame(rep(4,length(df_fd$fd_e_up)),df_fd$fd_e_up)
+temp3 <- data.frame(rep(2,length(df_fd$fd_i_lo)),df_fd$fd_i_lo)
+temp4 <- data.frame(rep(1,length(df_fd$fd_e_lo)),df_fd$fd_e_lo)
+
+colnames(temp1) <- c("line", "fd")
+colnames(temp2) <- c("line", "fd")
+colnames(temp3) <- c("line", "fd")
+colnames(temp4) <- c("line", "fd")
+
+temp5 <- rbind(temp1, temp2, temp3, temp4)
+x <- dim(temp5)[1]
+
+temp5$line[x] <- -2
+temp5$fd[x] <- 2
+
+```
+
+
+Create descriptive stat labels.
+
+```{r}
+
+quartile_1 <- function(x) {quantile(x, probs = seq(0,1,0.25), na.rm = TRUE)[2]}
+quartile_3 <- function(x) {quantile(x, probs = seq(0,1,0.25), na.rm = TRUE)[4]}
+
+means <- aggregate(temp5$fd, list(temp5$line), FUN=mean)
+sds <- aggregate(temp5$fd, list(temp5$line), FUN=sd)
+medians <- aggregate(temp5$fd, list(temp5$line), FUN=median)
+firstq <- aggregate(temp5$fd, list(temp5$line), FUN=quartile_1)
+thirdq <- aggregate(temp5$fd, list(temp5$line), FUN=quartile_3)
+mins <- aggregate(temp5$fd, list(temp5$line), FUN=min)
+maxs <- aggregate(temp5$fd, list(temp5$line), FUN=max)
+
+mtext4 <- paste(round(means[5,2], digits=2),"±", round(sds[5,2], digits=2))
+mtext3 <- paste(round(means[4,2], digits=2),"±", round(sds[4,2], digits=2))
+mtext2 <- paste(round(means[3,2], digits=2),"±", round(sds[3,2], digits=2))
+mtext1 <- paste(round(means[2,2], digits=2),"±", round(sds[2,2], digits=2))
+
+medtext4 <- paste(round(medians[5,2], digits=2)," (",round(firstq[5,2], digits = 2), " - ", round(thirdq[5,2], digits = 2), ")", sep = "")
+medtext3 <- paste(round(medians[4,2], digits=2)," (",round(firstq[4,2], digits = 2), " - ", round(thirdq[4,2], digits = 2), ")", sep = "")
+medtext2 <- paste(round(medians[3,2], digits=2)," (",round(firstq[3,2], digits = 2), " - ", round(thirdq[3,2], digits = 2), ")", sep = "")
+medtext1 <- paste(round(medians[2,2], digits=2)," (",round(firstq[2,2], digits = 2), " - ", round(thirdq[2,2], digits = 2), ")", sep = "")
+
+rangetext4 <- paste(round(mins[5,2], digits = 2), "-", round(maxs[5,2], digits = 2))
+rangetext3 <- paste(round(mins[4,2], digits = 2), "-", round(maxs[4,2], digits = 2))
+rangetext2 <- paste(round(mins[3,2], digits = 2), "-", round(maxs[3,2], digits = 2))
+rangetext1 <- paste(round(mins[2,2], digits = 2), "-", round(maxs[2,2], digits = 2))
+
+
+
+```
+
+
+Construct the ggplot
+
+```{r}
+rangeplot <- ggplot(data = temp5, aes(x = fd, y =  line))+
+    
+    geom_hline(yintercept = -0.8, color="white")+
+    geom_hline(yintercept = 5.2, color="white")+
+    
+    geom_segment(aes(x=-0.2, y=6, xend=3, yend=6), color="white")+
+    
+    geom_segment(aes(x=0, y=-0.3, xend=0, yend=5.4), color = "wheat2", linetype = "dotted", size=1)+
+     geom_segment(aes(x=0.5, y=-0.3, xend=0.5, yend=5.4), color = "wheat2", linetype = "dotted", size=1)+
+     geom_segment(aes(x=1, y=-0.3, xend=1, yend=5.4), color = "wheat2", linetype = "dotted", size=1)+
+     geom_segment(aes(x=1.5, y=-0.3, xend=1.5, yend=5.4), color = "wheat2", linetype = "dotted", size=1)+
+     geom_segment(aes(x=2, y=-0.3, xend=2, yend=5.4), color = "wheat2", linetype = "dotted", size=1)+
+    
+    #geom_segment(aes(x=-0.2, y=5, xend=2, yend=4,  size = 1), color = "beige")+
+    #geom_segment(aes(x=-0.2, y=4, xend=2, yend=3,  size = 1), color = "beige")+
+    #geom_segment(aes(x=-0.2, y=2, xend=2, yend=2,  size = 1), color = "beige")+
+    #geom_segment(aes(x=-0.2, y=1, xend=2, yend=1,  size = 1), color = "beige")+
+    
+    geom_point(alpha = 0.5, shape = 73, size = 18)+
+    geom_point(aes(x = 2, y = -2), shape = 73, size = 18, color="white")+
+    
+    annotate("text", x=-0.25, y=4.64, label = "{", size = 45, color = "beige")+
+    annotate("text", x=-0.25, y=1.64, label = "{", size = 45, color = "beige")+
+    
+    annotate("text", x=-0.2, y=5, label = "Inspiration")+
+    annotate("text", x=-0.2, y=4, label = "Expiration")+
+    annotate("text", x=-0.2, y=2, label = "Inspiration")+
+    annotate("text", x=-0.2, y=1, label = "Expiration")+
+    
+    annotate("text", x=-0.4, y=4.5, label = "Upper\nlung", size = 5, color = "bisque4")+
+    annotate("text", x=-0.4, y=1.5, label = "Lower\nlung", size = 5, color = "bisque4")+
+    
+    annotate("text", x=0, y=0.1, label="0.0", size = 7, color = "lightblue4")+
+    annotate("text", x=0.5, y=0.1, label="0.5", size = 7, color = "lightblue4")+
+    annotate("text", x=1, y=0.1, label="1.0", size = 7, color = "lightblue4")+
+    annotate("text", x=1.5, y=0.1, label="1.5", size = 7, color = "lightblue4")+
+    annotate("text", x=2, y=0.1, label="2.0", size = 7, color = "lightblue4")+
+    
+    annotate("text", x=-0.5, y=0.1, label="FD:", size = 7, color = "lightblue4")+
+    
+    #annotate("text", x=1, y=-0.5, label = "Non-fractal\npattern /\n spatial\nhomogeneity", color = "blue", size=3.5)+
+    #annotate("text", x=0, y=-1.5, label = "Non-detection of\nair trapping", color = "blue", size=3.5)+
+    #annotate("text", x=1.5, y=-0.5, label = "Expected\nvalue for a\nrandom\npattern", color = "blue", size=3.5)+
+    #annotate("text", x=2, y=-1.5, label = "Complete\nspace\nfilling", color = "blue", size=3.5)+
+    
+    annotate("text", x=2.6, y=5, label = "Mean ± SD:\nMedian (25%-75%):\nRange:", size=3, hjust=1)+
+    annotate("text", x=2.6, y=4, label = "Mean ± SD:\nMedian(25%-75%):\nRange:", size=3, hjust=1)+
+    annotate("text", x=2.6, y=2, label = "Mean ± SD:\nMedian(25%-75%):\nRange:", size=3, hjust=1)+
+    annotate("text", x=2.6, y=1, label = "Mean ± SD:\nMedian(25%-75%):\nRange:", size=3, hjust=1)+
+    
+    annotate("text", x=2.62, y=5, label = paste(mtext4, "\n", medtext4, "\n", rangetext4, sep = ""), size=3, hjust=0)+
+    annotate("text", x=2.62, y=4, label = paste(mtext3, "\n", medtext3, "\n", rangetext3, sep = ""), size=3, hjust=0)+
+    annotate("text", x=2.62, y=2, label = paste(mtext2, "\n", medtext2, "\n", rangetext2, sep = ""), size=3, hjust=0)+
+    annotate("text", x=2.62, y=1, label = paste(mtext1, "\n", medtext1, "\n", rangetext1, sep = ""), size=3, hjust=0)+
+    
+    #geom_segment(aes(x=0.99, y=-0.5, xend=0, yend=-0.5), color = "grey", size=1, arrow = arrow())+
+    #annotate("text", x=2.1, y=-0.5, label = "Thinning", size=3.5, hjust=0, color = "grey")+
+    
+    #geom_segment(aes(x=0, y=-1, xend=0.99, yend=-1), color = "grey", size=1, arrow = arrow())+
+    #geom_segment(aes(x=2, y=-1, xend=1.01, yend=-1), color = "grey", size=1, arrow = arrow())+
+    #annotate("text", x=2.1, y=-1, label = "Uniformity of distributions", size=3.5, hjust=0, color = "grey")+
+    
+    #geom_segment(aes(x=1.01, y=-1.5, xend=2, yend=-1.5), color = "grey", size=1, arrow = arrow())+
+    #annotate("text", x=2.1, y=-1.5, label = "Complexity of air-trapping", size=3.5, hjust=0, color = "grey")+
+    
+        theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title = element_blank(),
+          panel.background = element_blank(),
+          legend.position = "none",
+          panel.margin=unit(c(4,2,3,4),"cm"))
+
+rangeplot
+
+
+
+
+pdf(file = "fd_range_plot.pdf", width = 10, height=6)
+
+    rangeplot
+   
+dev.off()
+
+
+
+
+pdf(file = "C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/Submission2_Investigative_Radiology/figure_2/figure_2_fd_range_plot.pdf", width = 10, height=6)
+
+    rangeplot
+   
+dev.off()
+
+```
+
+
+
+
